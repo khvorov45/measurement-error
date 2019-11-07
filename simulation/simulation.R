@@ -1,26 +1,39 @@
 # Simulations of data ideal for the models
 # Arseniy Khvorov
 # Created 2019/10/30
-# Last edit 2019/10/30
+# Last edit 2019/11/07
 
 suppressPackageStartupMessages(library(rstan))
 suppressPackageStartupMessages(library(tidyverse))
 library(purrr)
 library(ggdark) # devtools::install("khvorov45/ggdark")
+library(future)
+library(furrr)
+
+plan(multiprocess) # May not work on windows
 
 model_folder <- "model"
+sim_folder <- "simulation"
 
-sim_linear <- function(n, beta0, betax, sigma, x_error = 0, y_error = 0) {
+# Function definitions ========================================================
+
+sim_linear <- function(n = 100, beta0 = -1, betax = 1, sigma = 1,
+                       x_error = 0, y_error = 0,
+                       seed = sample.int(.Machine$integer.max, 1)) {
+  set.seed(seed)
   tibble(.rows = n) %>%
     mutate(
-      x_true = rnorm(n()),
+      x_true = rnorm(n(), 0, 5),
       y_true = rnorm(n(), beta0 + betax * x_true, sigma),
       x_meas = rnorm(n(), x_true, x_error),
       y_meas = rnorm(n(), y_true, y_error)
     )
 }
 
-sim_props <- function(n, rel_fit, kappa, x_error = 0, y_error = 0) {
+sim_props <- function(n = 100, rel_fit = 1, kappa = 5,
+                      x_error = 0, y_error = 0,
+                      seed = sample.int(.Machine$integer.max, 1)) {
+  set.seed(seed)
   rbeta_prop <- function(n, mu, kappa) rbeta(n, mu * kappa, (1 - mu) * kappa)
   prop_error <- function(vec, err) {
     if (err == 0) return(vec)
@@ -37,8 +50,14 @@ sim_props <- function(n, rel_fit, kappa, x_error = 0, y_error = 0) {
     )
 }
 
-plot_scatter <- function(lin) {
-  lin %>%
+sim_data_dict <- function(fun, data_name, dict,
+                          seed = sample.int(.Machine$integer.max, 1)) {
+  pars <- dict %>% filter(name == data_name) %>% select(-name)
+  do.call(fun, c(pars, seed = seed))
+}
+
+plot_scatter <- function(dat) {
+  dat %>%
     ggplot(aes(x_meas, y_meas)) +
     dark_theme_bw(verbose = FALSE) +
     geom_point()
@@ -58,7 +77,8 @@ plot_y_error <- function(lin) {
     geom_point()
 }
 
-fit_stan_model <- function(model_compiled, data) {
+fit_stan_model <- function(model_compiled, data, iter = 2000,
+                           seed = sample.int(.Machine$integer.max, 1)) {
   sampling(
     model_compiled,
     data = list(
@@ -67,23 +87,74 @@ fit_stan_model <- function(model_compiled, data) {
       x = data$x_meas
     ),
     cores = 1,
-    chains = 1,
-    iter = 2000
+    chains = 2,
+    iter = iter,
+    seed = seed
   )
 }
 
-lin <- stan_model(file.path(model_folder, "linear.stan"))
-lin_xme <- stan_model(file.path(model_folder, "linear-xme.stan"))
-lin_xyme <- stan_model(file.path(model_folder, "linear-xyme.stan"))
+tidy_stan_fit <- function(stan_fit) {
+  pars <- names(stan_fit)
+  pars <- pars[!grepl("\\[", pars)]
+  pars <- pars[pars != "lp__"]
+  summ <- summary(stan_fit, pars = pars)$summary
+  summ %>%
+    as_tibble() %>%
+    mutate(
+      seed = get_seed(stan_fit),
+      term = rownames(summ),
+      iter = length(rstan::extract(stan_fit, pars = pars)[[1]])
+    ) %>%
+    select(term, everything())
+}
 
-props <- stan_model(file.path(model_folder, "props.stan"))
-props_xme <- stan_model(file.path(model_folder, "props-xme.stan"))
-props_xyme <- stan_model(file.path(model_folder, "props-xyme.stan"))
+sim_fit_one <- function(fun, data_name, data_dict,
+                        model_compiled, iter,
+                        seed = sample.int(.Machine$integer.max, 1)) {
+  dat <- sim_data_dict(fun, data_name, data_dict, seed)
+  true_vals <- data_dict %>%
+    filter(name == data_name) %>%
+    select(-name) %>%
+    pivot_longer(everything(), names_to = "term", values_to = "true_val")
+  fit_stan_model(model_compiled, dat, iter, seed) %>%
+    tidy_stan_fit() %>%
+    left_join(true_vals, by = "term")
+}
 
-dat <- sim_props(1e3, 1, 5, 0.05, 0.05)
-plot_scatter(dat)
-plot_x_error(dat)
-plot_y_error(dat)
+sim_fit_many <- function(nsim, init_seed, ...) {
+  future_map_dfr(1:nsim, function(i) sim_fit_one(..., seed = init_seed + i))
+}
 
-fit <- fit_stan_model(props_xyme, dat)
-summary(fit, pars = c("rel_fit", "kappa"))$summary
+save_res <- function(res, nsim, data_name, model_name, sim_folder) {
+  res %>%
+    mutate(data = data_name, model = model_name) %>%
+    write_csv(
+      file.path(
+        sim_folder,
+        paste0(data_name, "--", model_name, "--", nsim, "sims.csv")
+      )
+    )
+}
+
+# Simulation script ===========================================================
+
+data_dict_lin <- tribble(
+  ~name, ~n, ~beta0, ~betax, ~sigma, ~x_error, ~y_error,
+  "med-pos-noerror", 200, -1, 1, 1, 0, 0,
+  "med-pos-xyerror", 200, -1, 1, 1, 0.5, 0.5,
+)
+
+sim_fun <- sim_linear
+data_name <- "med-pos-noerror"
+data_dict <- data_dict_lin
+nsim <- 2
+model_name <- "linear"
+model_compiled <- stan_model(
+  file.path(model_folder, paste0(model_name, ".stan"))
+)
+
+res <- sim_fit_many(
+  nsim, 20191107, sim_fun, data_name, data_dict, model_compiled, 40000
+)
+
+save_res(res, nsim, data_name, model_name, sim_folder)

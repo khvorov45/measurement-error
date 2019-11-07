@@ -1,7 +1,7 @@
 // Linear model with measurement error on x and y
 // Arseniy Khvorov
 // Created 2019/10/30
-// Last edit 2019/10/30
+// Last edit 2019/11/07
 
 data {
   int<lower=1> n;
@@ -20,7 +20,7 @@ parameters {
 model {
   true_y ~ normal(0, 5);
   y ~ normal(true_y, 0.5);
-  true_x ~ normal(0, 1);
+  true_x ~ normal(0, 5);
   x ~ normal(true_x, 0.5);
   beta0 ~ normal(0, 10);
   betax ~ normal(0, 10);
