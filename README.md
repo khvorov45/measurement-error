@@ -1,2 +1,3 @@
-# measurement-error
- Investigation of measurement error in Bayesian context
+# sim-stan
+
+A project for fitting stan models to simulated data.
