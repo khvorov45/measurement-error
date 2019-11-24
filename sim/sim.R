@@ -10,6 +10,7 @@ library(ggdark) # devtools::install("khvorov45/ggdark")
 library(future)
 library(furrr)
 
+rstan_options(auto_write = TRUE)
 plan(multiprocess) # May not work on windows
 
 model_folder <- "model"
