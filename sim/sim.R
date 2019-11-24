@@ -6,7 +6,6 @@
 suppressPackageStartupMessages(library(rstan))
 suppressPackageStartupMessages(library(tidyverse))
 library(purrr)
-library(ggdark) # devtools::install("khvorov45/ggdark")
 library(future)
 library(furrr)
 
