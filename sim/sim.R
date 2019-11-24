@@ -8,6 +8,7 @@ suppressPackageStartupMessages(library(tidyverse))
 library(purrr)
 library(future)
 library(furrr)
+library(truncnorm)
 
 rstan_options(auto_write = TRUE)
 plan(multiprocess) # May not work on windows
@@ -37,7 +38,7 @@ sim_props <- function(n = 100, rel_fit = 1, kappa = 5,
   rbeta_prop <- function(n, mu, kappa) rbeta(n, mu * kappa, (1 - mu) * kappa)
   prop_error <- function(vec, err) {
     if (err == 0) return(vec)
-    truncnorm::rtruncnorm(length(vec), 0, 1, vec, err)
+    rtruncnorm(length(vec), 0, 1, vec, err)
   }
   tibble(.rows = n) %>%
     mutate(
