@@ -13,9 +13,9 @@ library(furrr)
 plan(multiprocess) # May not work on windows
 
 model_folder <- "model"
-sim_folder <- "simulation"
+sim_folder <- "sim"
 
-# Function definitions ========================================================
+# Functions ===================================================================
 
 sim_linear <- function(n = 100, beta0 = -1, betax = 1, sigma = 1,
                        x_error = 0, y_error = 0,
@@ -136,7 +136,7 @@ save_res <- function(res, nsim, data_name, model_name, sim_folder) {
     )
 }
 
-# Simulation script ===========================================================
+# Script ======================================================================
 
 data_dict_lin <- tribble(
   ~name, ~n, ~beta0, ~betax, ~sigma, ~x_error, ~y_error,
