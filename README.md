@@ -10,3 +10,4 @@ A project for fitting stan models to simulated data.
 
 * `sim-summary` - summary of simulations.
 
+* `tests` - tests of functions (expected to be in the global enviironment).
