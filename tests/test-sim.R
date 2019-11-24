@@ -3,9 +3,11 @@
 # Created 2019/11/25
 # Last edit 2019/11/25
 
+library(ggdark) # devtools::install_github("khvorov45/ggdark")
+
 plot_scatter <- function(dat) {
   dat %>%
-    ggplot(aes(x_meas, y_meas)) +
+    ggplot(aes(x_obs, y_obs)) +
     dark_theme_bw(verbose = FALSE) +
     geom_point()
 }
@@ -23,3 +25,6 @@ plot_y_error <- function(lin) {
     dark_theme_bw(verbose = FALSE) +
     geom_point()
 }
+
+sim_data_dict(sim_linear, "med-pos-xymiss", data_dict_lin) %>%
+  plot_scatter()
